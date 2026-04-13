@@ -65,6 +65,15 @@ class FirestoreService {
 
   SessionResult _sessionFromDoc(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
+    SessionMetrics? metrics;
+    try {
+      if (d.containsKey('maxFocusStreak') || d.containsKey('fatigueIndex') || d.containsKey('microDistractions')) {
+        metrics = SessionMetrics.fromFirestore(d);
+      }
+    } catch (_) {
+      metrics = null;
+    }
+
     return SessionResult(
       id: doc.id,
       childId: d['childId'] ?? '',
@@ -77,6 +86,8 @@ class FirestoreService {
       storedFocusPercentage: (d['focusPercentage'] as num?)?.toDouble() ?? 0.0,
       storedDistractorResistance: (d['distractorResistance'] as num?)?.toDouble() ?? 0.0,
       storedAvgRecoveryTime: (d['avgRecoveryTime'] as num?)?.toDouble() ?? 0.0,
+      metrics: metrics,
+      tempVideoPath: (d['tempVideoPath'] as String?) ?? null,
     );
   }
 

@@ -1123,10 +1123,10 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       return result.id;
     });
 
-    // Navigate instantly (No freezing)
+    // Navigate to a short confirmation screen, then user can open results
     if (mounted) {
       context.pushReplacement(
-        '/results/$sessionId',
+        '/session/complete',
         extra: result,
       );
     }

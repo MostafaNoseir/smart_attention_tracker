@@ -50,13 +50,42 @@ class _ResultsScreenState extends State<ResultsScreen> {
     }
 
     final suggestedName = 'session_${widget.result.childName}_${widget.result.id}.mp4';
-    final destDir = await FilePicker.platform.getDirectoryPath();
-    if (destDir == null) return; // user cancelled
-    final destPath = p.join(destDir, suggestedName);
+
     try {
+      // Prefer saveFile dialog (desktop-friendly)
+      final output = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save session video',
+        fileName: suggestedName,
+        type: FileType.custom,
+        allowedExtensions: ['mp4'],
+      );
+
+      if (output != null) {
+        await src.copy(output);
+        try {
+          if (await src.exists()) await src.delete();
+        } catch (_) {}
+        setState(() {
+          _videoSaved = true;
+          _tempVideoPath = null;
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الفيديو'), backgroundColor: AppColors.success));
+        return;
+      }
+
+      // Fallback: directory picker + copy
+      final destDir = await FilePicker.platform.getDirectoryPath();
+      if (destDir == null) return;
+      final destPath = p.join(destDir, suggestedName);
       await src.copy(destPath);
-      setState(() => _videoSaved = true);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الفيديو')));
+      try {
+        if (await src.exists()) await src.delete();
+      } catch (_) {}
+      setState(() {
+        _videoSaved = true;
+        _tempVideoPath = null;
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الفيديو'), backgroundColor: AppColors.success));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في الحفظ: $e')));
     }
@@ -65,6 +94,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   @override
   Widget build(BuildContext context) {
     final result = widget.result;
+    final sessionMetrics = result.metrics ?? calculateSessionMetrics(result.gazePoints);
     final hasGazeData = result.gazePoints.isNotEmpty;
     final hasTimeline = result.attentionTimeline.isNotEmpty;
     return Scaffold(
@@ -132,11 +162,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
             const SizedBox(height: 32),
 
-            // Advanced metrics (show when available)
-            if (result.metrics != null) ...[
-              const SizedBox(height: 24),
-              _AdvancedMetricsRow(result: result),
-            ],
+            // Advanced metrics (always show using persisted or computed values)
+            const SizedBox(height: 24),
+            _AdvancedMetricsRow(result: result, metrics: sessionMetrics),
 
            // ── Attention Timeline ──────────────────────────────
             if (hasTimeline) ...[
@@ -837,18 +865,19 @@ class _ExportButtonState extends State<_ExportButton> {
 // ─── Advanced Metrics UI ───────────────────────────────────────
 class _AdvancedMetricsRow extends StatelessWidget {
   final SessionResult result;
-  const _AdvancedMetricsRow({super.key, required this.result});
+  final SessionMetrics metrics;
+  const _AdvancedMetricsRow({super.key, required this.result, required this.metrics});
 
   @override
   Widget build(BuildContext context) {
-    final m = result.metrics!;
+    final m = metrics;
     return Row(
       children: [
-        Expanded(child: _MetricTile(title: 'أطول تركيز', value: '${m.maxFocusStreak.toStringAsFixed(1)} ث', icon: Icons.timer)),
+        Expanded(child: _MetricTile(title: 'Max Focus Streak', value: '${m.maxFocusStreak.toStringAsFixed(1)} ', icon: Icons.timer)),
         const SizedBox(width: 16),
-        Expanded(child: _MetricTile(title: 'مؤشر الإرهاق', value: m.fatigueIndex.toStringAsFixed(2), icon: Icons.psychology, color: m.fatigueIndex > 0 ? Colors.orange : Colors.green)),
+        Expanded(child: _MetricTile(title: 'Fatigue Index', value: m.fatigueIndex.toStringAsFixed(2), icon: Icons.psychology, color: m.fatigueIndex > 0 ? Colors.orange : Colors.green)),
         const SizedBox(width: 16),
-        Expanded(child: _MetricTile(title: 'تشتتات دقيقة', value: '${m.microDistractions}', icon: Icons.flash_on)),
+        Expanded(child: _MetricTile(title: 'Micro-Distractions', value: '${m.microDistractions}', icon: Icons.flash_on)),
       ],
     );
   }

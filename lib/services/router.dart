@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:eye_focus/screens/dashboard/music_library_screen.dart';
 import 'package:eye_focus/screens/session/live_session_v2.dart';
+import 'package:eye_focus/screens/session/session_complete_screen.dart';
 import 'package:eye_focus/services/model_bridge.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
@@ -75,6 +76,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             config: args['config'] as SessionConfig,
             bridge: args['bridge'] as ModelBridge?,
           );
+        },
+      ),
+      GoRoute(
+        path: '/session/complete',
+        builder: (context, state) {
+          final result = state.extra as SessionResult;
+          return SessionCompleteScreen(result: result);
         },
       ),
       GoRoute(

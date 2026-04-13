@@ -76,7 +76,7 @@ class ChildProfile {
 // ─── Session Config ─────────────────────────────────────────────
 enum TargetShape { rocket, car, dinosaur, robot, star }
 enum DistractorType { none, colorFlash, sideMotion, shapeAppear, soundPulse }
-enum SessionDuration { half, one, oneAndHalf, two }
+enum SessionDuration { half, fortyFive, one, oneAndHalf, two }
 enum MovementSpeed { slow, medium, fast }
 
 extension TargetShapeExt on TargetShape {
@@ -118,36 +118,57 @@ extension SessionDurationExt on SessionDuration {
   // بنحسبها بالثواني عشان الكسور
   int get seconds {
     switch (this) {
-      case SessionDuration.half: return 30;
-      case SessionDuration.one: return 60;
-      case SessionDuration.oneAndHalf: return 90;
-      case SessionDuration.two: return 120;
+      case SessionDuration.half:
+        return 30;
+      case SessionDuration.fortyFive:
+        return 45;
+      case SessionDuration.one:
+        return 60;
+      case SessionDuration.oneAndHalf:
+        return 90;
+      case SessionDuration.two:
+        return 120;
     }
   }
 
   String get label {
     switch (this) {
-      case SessionDuration.half: return '30 sec';
-      case SessionDuration.one: return '1 min';
-      case SessionDuration.oneAndHalf: return '1.5 min';
-      case SessionDuration.two: return '2 min';
+      case SessionDuration.half:
+        return '30 sec';
+      case SessionDuration.fortyFive:
+        return '45 sec';
+      case SessionDuration.one:
+        return '1 min';
+      case SessionDuration.oneAndHalf:
+        return '1.5 min';
+      case SessionDuration.two:
+        return '2 min';
     }
   }
 
   // دول عشان نعرضهم بشكل شيك في الزراير
   String get shortValue {
     switch (this) {
-      case SessionDuration.half: return '30';
-      case SessionDuration.one: return '1';
-      case SessionDuration.oneAndHalf: return '1.5';
-      case SessionDuration.two: return '2';
+      case SessionDuration.half:
+        return '30';
+      case SessionDuration.fortyFive:
+        return '45';
+      case SessionDuration.one:
+        return '1';
+      case SessionDuration.oneAndHalf:
+        return '1.5';
+      case SessionDuration.two:
+        return '2';
     }
   }
 
   String get shortUnit {
     switch (this) {
-      case SessionDuration.half: return 'sec';
-      default: return 'min';
+      case SessionDuration.half:
+      case SessionDuration.fortyFive:
+        return 'sec';
+      default:
+        return 'min';
     }
   }
 }
@@ -483,57 +504,74 @@ SessionMetrics calculateSessionMetrics(List<GazePoint> points) {
 
   points.sort((a, b) => a.timestampMs.compareTo(b.timestampMs));
 
-  final startTime = points.first.timestampMs / 1000.0;
-  final endTime = points.last.timestampMs / 1000.0;
-  final totalDuration = endTime - startTime;
+  final int startMs = points.first.timestampMs;
+  final int endMs = points.last.timestampMs;
+  final double totalDuration = (endMs - startMs) / 1000.0;
   if (totalDuration <= 0) return SessionMetrics(maxFocusStreak: 0, fatigueIndex: 0, microDistractions: 0);
 
-  double maxStreak = 0;
-  double currentStreak = 0;
-  double lastFocusTime = 0;
+  double maxStreak = 0.0;
+  bool inStreak = points.first.isOnTarget;
+  int streakStartMs = inStreak ? points.first.timestampMs : 0;
 
-  final halfTime = startTime + totalDuration / 2;
-  double focusFirstHalf = 0;
-  double focusSecondHalf = 0;
+  final int halfMs = startMs + ((endMs - startMs) ~/ 2);
+  double focusFirstHalf = 0.0;
+  double focusSecondHalf = 0.0;
 
   int microCount = 0;
   bool wasFocused = points.first.isOnTarget;
-  double distractionStart = 0;
+  double distractionStart = 0.0;
 
   for (int i = 0; i < points.length; i++) {
     final p = points[i];
-    final isFocused = p.isOnTarget;
-    final timeSec = p.timestampMs / 1000.0;
 
-    // 1. Max Focus Streak
-    if (isFocused) {
-      if (currentStreak == 0) lastFocusTime = timeSec;
-      currentStreak = timeSec - lastFocusTime;
-      if (currentStreak > maxStreak) maxStreak = currentStreak;
+    // -- Max focus streak (track contiguous focused samples)
+    if (p.isOnTarget) {
+      if (!inStreak) {
+        inStreak = true;
+        streakStartMs = p.timestampMs;
+      }
     } else {
-      currentStreak = 0;
+      if (inStreak) {
+        final int streakEndMs = points[i - 1].timestampMs;
+        final double streakSec = (streakEndMs - streakStartMs) / 1000.0;
+        if (streakSec > maxStreak) maxStreak = streakSec;
+        inStreak = false;
+      }
     }
 
-    // 2. Fatigue Index
-    final durationThisFrame = i == 0 ? 0 : (timeSec - (points[i-1].timestampMs / 1000.0));
-    if (isFocused) {
-      if (timeSec <= halfTime) focusFirstHalf += durationThisFrame;
-      else focusSecondHalf += durationThisFrame;
+    // -- Fatigue (split focus time between first/second half)
+    if (i > 0) {
+      final prev = points[i - 1];
+      final double dt = (p.timestampMs - prev.timestampMs) / 1000.0;
+      if (p.isOnTarget) {
+        final int midMs = ((p.timestampMs + prev.timestampMs) ~/ 2);
+        if (midMs <= halfMs) focusFirstHalf += dt;
+        else focusSecondHalf += dt;
+      }
     }
 
-    // 3. Micro Distractions
-    if (wasFocused && !isFocused) {
+    // -- Micro distractions (short distractions < 1s)
+    final double timeSec = p.timestampMs / 1000.0;
+    if (wasFocused && !p.isOnTarget) {
       distractionStart = timeSec;
-    } else if (!wasFocused && isFocused && distractionStart > 0) {
-      final distractionDuration = timeSec - distractionStart;
+    } else if (!wasFocused && p.isOnTarget && distractionStart > 0) {
+      final double distractionDuration = timeSec - distractionStart;
       if (distractionDuration > 0 && distractionDuration < 1.0) microCount++;
+      distractionStart = 0;
     }
-    wasFocused = isFocused;
+
+    wasFocused = p.isOnTarget;
   }
 
-  final firstRatio = focusFirstHalf / (totalDuration / 2);
-  final secondRatio = focusSecondHalf / (totalDuration / 2);
-  final fatigueIndex = firstRatio - secondRatio;   // > 0 = إرهاق
+  // close any open streak at the end
+  if (inStreak) {
+    final double streakSec = (points.last.timestampMs - streakStartMs) / 1000.0;
+    if (streakSec > maxStreak) maxStreak = streakSec;
+  }
+
+  final double firstRatio = focusFirstHalf / (totalDuration / 2);
+  final double secondRatio = focusSecondHalf / (totalDuration / 2);
+  final double fatigueIndex = firstRatio - secondRatio;
 
   return SessionMetrics(
     maxFocusStreak: maxStreak,
