@@ -675,6 +675,10 @@ import '../../models/models.dart';
 import '../../services/firestore_service.dart';
 import '../../services/model_bridge.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:camera/camera.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:path/path.dart' as p;
 
 class LiveSessionScreen extends StatefulWidget {
   final ChildProfile child;
@@ -699,6 +703,11 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   GazeData? _latestGaze;
   bool _bridgeStarted = false;
   final AudioPlayer _audioPlayer = AudioPlayer();
+
+  // Camera recording (temporary video of the child)
+  CameraController? _cameraController;
+  bool _isRecordingVideo = false;
+  String? _tempVideoPath;
 
   Offset _targetPos = const Offset(0.395, 0.384);
   final _rand = Random();
@@ -746,6 +755,50 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
         setState(() => _cursorVisible = false);
       }
     });
+  }
+
+  // Camera helpers
+  Future<void> _initCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
+      final cam = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+      _cameraController = CameraController(cam, ResolutionPreset.medium, enableAudio: true);
+      await _cameraController!.initialize();
+    } catch (e) {
+      debugPrint('[LiveSession] Camera init failed: $e');
+    }
+  }
+
+  Future<void> _startRecording() async {
+    if (_cameraController == null) return;
+    try {
+      if (!_cameraController!.value.isInitialized) return;
+      await _cameraController!.startVideoRecording();
+      _isRecordingVideo = true;
+      debugPrint('[LiveSession] Video recording started');
+    } catch (e) {
+      debugPrint('[LiveSession] startRecording error: $e');
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    if (_cameraController == null || !_isRecordingVideo) return;
+    try {
+      final XFile xfile = await _cameraController!.stopVideoRecording();
+      final tmpDir = await getTemporaryDirectory();
+      final destPath = p.join(tmpDir.path, 'session_${DateTime.now().millisecondsSinceEpoch}.mp4');
+      final src = File(xfile.path);
+      await src.copy(destPath);
+      _tempVideoPath = destPath;
+      debugPrint('[LiveSession] Video saved to temp: $destPath');
+    } catch (e) {
+      debugPrint('[LiveSession] stopRecording error: $e');
+    }
+    _isRecordingVideo = false;
   }
 
   @override
@@ -887,6 +940,13 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       });
 
       _recordGazePoint();
+    });
+
+    // Initialize camera and start recording (non-blocking)
+    _initCamera().then((_) async {
+      if (_cameraController != null && _cameraController!.value.isInitialized) {
+        await _startRecording();
+      }
     });
   }
 
@@ -1033,8 +1093,13 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     try { await _audioPlayer.stop(); } catch (_) {}
     try { await _audioPlayer.dispose(); } catch (_) {}
 
+    // Stop recording (if any) and attach temp path to the result
+    try {
+      await _stopRecording();
+    } catch (_) {}
+
     // 1. Generate a permanent, unique ID right now
-    final metrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());  // New
+    final metrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());
 
     final sessionId = 'local_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -1047,7 +1112,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       endTime: DateTime.now(),
       gazePoints: _gazePoints,
       attentionTimeline: _buildTimeline(),
-      metrics: metrics,        // New
+      metrics: metrics,
+      tempVideoPath: _tempVideoPath,
     );
 
     // Fire-and-forget save (don't await)
@@ -1074,9 +1140,19 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     _changeDirTimer?.cancel();
     _loggingTimer.cancel();
     _gazeSub?.cancel();
-    await _bridge.stop();
-    await _audioPlayer.stop();
-    await _audioPlayer.dispose();
+    try { await _stopRecording(); } catch (_) {}
+    try { await _bridge.stop(); } catch (_) {}
+    try { await _audioPlayer.stop(); } catch (_) {}
+    try { await _audioPlayer.dispose(); } catch (_) {}
+
+    // If a temp video exists (but session aborted), remove it
+    if (_tempVideoPath != null) {
+      try {
+        final f = File(_tempVideoPath!);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+      _tempVideoPath = null;
+    }
 
     if (mounted) {
       context.pop(); // Returns to the previous screen without pushing results
@@ -1469,6 +1545,12 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     _gazeSub?.cancel();
     try {
       _audioPlayer.dispose();
+    } catch (_) {}
+    try {
+      await _stopRecording();
+    } catch (_) {}
+    try {
+      _cameraController?.dispose();
     } catch (_) {}
     // await _audioPlayer.stop();
     // await _audioPlayer.dispose();

@@ -3,17 +3,68 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import '../../models/models.dart';
 import '../../services/firestore_service.dart';
 
-class ResultsScreen extends StatelessWidget {
+class ResultsScreen extends StatefulWidget {
   final SessionResult result;
   const ResultsScreen({super.key, required this.result});
 
   @override
+  State<ResultsScreen> createState() => _ResultsScreenState();
+}
+
+class _ResultsScreenState extends State<ResultsScreen> {
+  bool _videoSaved = false;
+  String? _tempVideoPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _tempVideoPath = widget.result.tempVideoPath;
+  }
+
+  @override
+  void dispose() {
+    // If the video wasn't explicitly saved, delete the temporary file when leaving.
+    if (!_videoSaved && _tempVideoPath != null) {
+      try {
+        final f = File(_tempVideoPath!);
+        if (f.existsSync()) f.deleteSync();
+      } catch (_) {}
+    }
+    super.dispose();
+  }
+
+  Future<void> _saveVideo() async {
+    if (_tempVideoPath == null) return;
+    final src = File(_tempVideoPath!);
+    if (!await src.exists()) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Temporary video not found')));
+      return;
+    }
+
+    final suggestedName = 'session_${widget.result.childName}_${widget.result.id}.mp4';
+    final destDir = await FilePicker.platform.getDirectoryPath();
+    if (destDir == null) return; // user cancelled
+    final destPath = p.join(destDir, suggestedName);
+    try {
+      await src.copy(destPath);
+      setState(() => _videoSaved = true);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الفيديو')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في الحفظ: $e')));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final result = widget.result;
     final hasGazeData = result.gazePoints.isNotEmpty;
     final hasTimeline = result.attentionTimeline.isNotEmpty;
     return Scaffold(
@@ -46,6 +97,34 @@ class ResultsScreen extends StatelessWidget {
               .animate().fadeIn().slideY(begin: -0.05),
 
             const SizedBox(height: 32),
+
+            // Temporary video note + save button (transient)
+            if (_tempVideoPath != null) ...[
+              AppCard(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _videoSaved ? 'تم حفظ فيديو الجلسة على جهازك' : 'تم تسجيل فيديو مؤقت خلال الجلسة. إذا غادرت الصفحة بدون حفظ سيُحذف.',
+                            style: TextStyle(color: AppColors.textPrimary),
+                          ),
+                          if (!_videoSaved)
+                            Text('يمكنك حفظ الفيديو الآن إلى جهازك.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: _videoSaved ? null : _saveVideo,
+                      child: Text(_videoSaved ? 'محفوظ' : 'حفظ الفيديو'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             // ── Stats row ───────────────────────────────────────
             _StatsRow(result: result)

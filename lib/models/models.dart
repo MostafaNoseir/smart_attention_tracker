@@ -346,6 +346,7 @@ class SessionResult {
   final double? storedDistractorResistance;
   final double? storedAvgRecoveryTime;
   final SessionMetrics? metrics;
+  final String? tempVideoPath;
 
   SessionResult({
     required this.id,
@@ -360,6 +361,7 @@ class SessionResult {
     this.storedDistractorResistance,
     this.storedAvgRecoveryTime,
     this.metrics,
+    this.tempVideoPath,
   });
 
   int get durationSeconds => endTime.difference(startTime).inSeconds;

@@ -198,13 +198,12 @@ class FirestoreService {
       ]
     ];
 
-    // Append advanced metrics to the summary (if available)
-    if (result.metrics != null) {
-      rows.add(['', '', '', '']); // فاصل
-      rows.add(['Max Focus Streak (s)', result.metrics!.maxFocusStreak.toStringAsFixed(2), '', '']);
-      rows.add(['Fatigue Index', result.metrics!.fatigueIndex.toStringAsFixed(3), '', '']);
-      rows.add(['Micro Distractions', result.metrics!.microDistractions.toString(), '', '']);
-    }
+    // Append advanced metrics to the summary (always include - calculate if missing)
+    final m = result.metrics ?? calculateSessionMetrics(result.gazePoints);
+    rows.add(['', '', '', '']); // فاصل
+    rows.add(['Max Focus Streak (s)', m.maxFocusStreak.toStringAsFixed(2), '', '']);
+    rows.add(['Fatigue Index', m.fatigueIndex.toStringAsFixed(3), '', '']);
+    rows.add(['Micro Distractions', m.microDistractions.toString(), '', '']);
 
     final csvContent = rows.map((r) => r.join(',')).join('\n');
     
