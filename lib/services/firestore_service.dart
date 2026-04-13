@@ -204,9 +204,6 @@ class FirestoreService {
       rows.add(['Max Focus Streak (s)', result.metrics!.maxFocusStreak.toStringAsFixed(2), '', '']);
       rows.add(['Fatigue Index', result.metrics!.fatigueIndex.toStringAsFixed(3), '', '']);
       rows.add(['Micro Distractions', result.metrics!.microDistractions.toString(), '', '']);
-    } catch (_) {
-      // ignore: avoid_print
-      print('No advanced metrics available to append');
     }
 
     final csvContent = rows.map((r) => r.join(',')).join('\n');

@@ -753,11 +753,14 @@ class _ExportButtonState extends State<_ExportButton> {
             ),
     );
   }
-  class _AdvancedMetricsRow extends StatelessWidget { // new
-  final SessionResult result;
-  const _AdvancedMetricsRow({required this.result});
+}
 
-  @override                                             // new
+// ─── Advanced Metrics UI ───────────────────────────────────────
+class _AdvancedMetricsRow extends StatelessWidget {
+  final SessionResult result;
+  const _AdvancedMetricsRow({super.key, required this.result});
+
+  @override
   Widget build(BuildContext context) {
     final m = result.metrics!;
     return Row(
@@ -772,15 +775,16 @@ class _ExportButtonState extends State<_ExportButton> {
   }
 }
 
-  class _MetricTile extends StatelessWidget {    // new
-  final String title, value;
+class _MetricTile extends StatelessWidget {
+  final String title;
+  final String value;
   final IconData icon;
   final Color? color;
-  const _MetricTile({required this.title, required this.value, required this.icon, this.color});
+  const _MetricTile({super.key, required this.title, required this.value, required this.icon, this.color});
 
-  @override                                           // new
+  @override
   Widget build(BuildContext context) {
-    return AppCard(  // لو مش موجود استخدم Container مع decoration
+    return AppCard(
       child: Column(
         children: [
           Icon(icon, size: 32, color: color ?? Theme.of(context).primaryColor),
@@ -792,4 +796,4 @@ class _ExportButtonState extends State<_ExportButton> {
     );
   }
 }
-}
+ 

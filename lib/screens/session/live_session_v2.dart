@@ -1036,6 +1036,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     // 1. Generate a permanent, unique ID right now
     final metrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());  // New
 
+    final sessionId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+
     final result = SessionResult(
       id: sessionId, // 🚨 Use the permanent ID
       childId: widget.child.id,
@@ -1047,41 +1049,23 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       attentionTimeline: _buildTimeline(),
       metrics: metrics,        // New
     );
-    await FirestoreService().saveSession(result);
 
-    if (mounted) {
-    context.go('/session/complete', extra: result);   // ← الشاشة الوسيطة الجديدة
-  }
-
-    _bridge.stop();
-}
-
-    // 2. "Fire and Forget"
-    // We do NOT use 'await'. We just tell Firestore to save it. 
-    // If offline, Firestore instantly saves it to the local device cache and will 
-    // automatically push it to the cloud when the internet comes back.
+    // Fire-and-forget save (don't await)
     final service = FirestoreService();
     service.saveSession(result).catchError((e) {
       debugPrint('[LiveSession] Background sync error: $e');
-      return result.id; // 🚨 Satisfies Dart by returning a String
+      return result.id;
     });
 
-    // 3. Navigate instantly (No 3-second freezing!)
+    // Navigate instantly (No freezing)
     if (mounted) {
       context.pushReplacement(
         '/results/$sessionId',
-        extra: SessionResult(
-          id: sessionId,
-          childId: result.childId,
-          childName: result.childName,
-          config: result.config,
-          startTime: result.startTime,
-          endTime: result.endTime,
-          gazePoints: result.gazePoints,
-          attentionTimeline: result.attentionTimeline,
-        ),
+        extra: result,
       );
     }
+
+    _bridge.stop();
   }
 
   Future<void> _abortSession() async {

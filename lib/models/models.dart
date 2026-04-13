@@ -345,9 +345,7 @@ class SessionResult {
   final double? storedFocusPercentage;
   final double? storedDistractorResistance;
   final double? storedAvgRecoveryTime;
-  final double maxFocusStreak;           // new
-  final double fatigueIndex;             // new
-  final int microDistractions;           // new
+  final SessionMetrics? metrics;
 
   SessionResult({
     required this.id,
@@ -361,27 +359,20 @@ class SessionResult {
     this.storedFocusPercentage,
     this.storedDistractorResistance,
     this.storedAvgRecoveryTime,
-    required this.maxFocusStreak,       // new
-    required this.fatigueIndex,         // new
-    required this.microDistractions,    // new
+    this.metrics,
   });
 
   int get durationSeconds => endTime.difference(startTime).inSeconds;
 
   double get focusPercentage {
-    // لو الرقم جاي جاهز من الفايربيز، اعرضه فوراً
     if (storedFocusPercentage != null) return storedFocusPercentage!;
-    
-    // لو إحنا لسه جوه الجلسة (النقاط موجودة في الرامات)، احسبه
     if (gazePoints.isEmpty) return 0;
     final focused = gazePoints.where((p) => p.isOnTarget).length;
     return (focused / gazePoints.length) * 100;
   }
 
   double get distractorResistance {
-    // لو الرقم جاي جاهز من الفايربيز، اعرضه فوراً
     if (storedDistractorResistance != null) return storedDistractorResistance!;
-    
     final duringDistractor = gazePoints.where((p) => p.isDistractorActive).toList();
     if (duringDistractor.isEmpty) return 100;
     final stayed = duringDistractor.where((p) => p.isOnTarget).length;
@@ -397,41 +388,62 @@ class SessionResult {
     int recoveryStartMs = 0;
 
     for (var p in gazePoints) {
-      // لو المشتت شغال، والطفل مش مركز، ومكناش لسه بنحسب وقت
       if (p.isDistractorActive && !p.isOnTarget && !isRecovering) {
         isRecovering = true;
         recoveryStartMs = p.timestampMs;
       }
-      // لو كان بيتعافى (باصص بعيد) ورجع ركز تاني
       if (isRecovering && p.isOnTarget) {
-        double timeTaken = (p.timestampMs - recoveryStartMs) / 1000.0; // بالثواني
+        double timeTaken = (p.timestampMs - recoveryStartMs) / 1000.0;
         recoveryTimes.add(timeTaken);
         isRecovering = false;
       }
     }
 
-    if (recoveryTimes.isEmpty) return 0.0; // لو متشتتش خالص
+    if (recoveryTimes.isEmpty) return 0.0;
     return recoveryTimes.reduce((a, b) => a + b) / recoveryTimes.length;
   }
 
-  int get distractorCount => gazePoints
-    .where((p) => p.isDistractorActive).length;
+  int get distractorCount => gazePoints.where((p) => p.isDistractorActive).length;
 
-  Map<String, dynamic> toFirestore() => {
-    'childId': childId,
-    'childName': childName,
-    'config': config.toMap(),
-    'startTime': Timestamp.fromDate(startTime),
-    'endTime': Timestamp.fromDate(endTime),
-    'focusPercentage': focusPercentage,
-    'distractorResistance': distractorResistance,
-    'avgRecoveryTime': avgRecoveryTime,
-    'totalGazePoints': gazePoints.length,
-    'maxFocusStreak': maxFocusStreak,   // new
-    'fatigueIndex': fatigueIndex,   // new
-    'microDistractions': microDistractions,   // new
+  Map<String, dynamic> toFirestore() {
+    final map = {
+      'childId': childId,
+      'childName': childName,
+      'config': config.toMap(),
+      'startTime': Timestamp.fromDate(startTime),
+      'endTime': Timestamp.fromDate(endTime),
+      'focusPercentage': focusPercentage,
+      'distractorResistance': distractorResistance,
+      'avgRecoveryTime': avgRecoveryTime,
+      'totalGazePoints': gazePoints.length,
+    };
+    if (metrics != null) {
+      map['maxFocusStreak'] = metrics!.maxFocusStreak;
+      map['fatigueIndex'] = metrics!.fatigueIndex;
+      map['microDistractions'] = metrics!.microDistractions;
+    }
+    return map;
+  }
+}
+
+class SessionMetrics {
+  final double maxFocusStreak;
+  final double fatigueIndex;
+  final int microDistractions;
+
+  SessionMetrics({
+    required this.maxFocusStreak,
+    required this.fatigueIndex,
+    required this.microDistractions,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'maxFocusStreak': maxFocusStreak,
+    'fatigueIndex': fatigueIndex,
+    'microDistractions': microDistractions,
   };
-  factory SessionMetrics.fromFirestore(Map<String, dynamic> data) {    // new
+
+  factory SessionMetrics.fromFirestore(Map<String, dynamic> data) {
     return SessionMetrics(
       maxFocusStreak: (data['maxFocusStreak'] as num?)?.toDouble() ?? 0.0,
       fatigueIndex: (data['fatigueIndex'] as num?)?.toDouble() ?? 0.0,
