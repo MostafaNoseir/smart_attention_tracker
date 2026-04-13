@@ -1028,13 +1028,13 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     _sessionTimer.cancel();
     _changeDirTimer?.cancel();
     _loggingTimer.cancel();
-    await _bridge.stop();
+    _audioPlayer.stop();
     
     try { await _audioPlayer.stop(); } catch (_) {}
     try { await _audioPlayer.dispose(); } catch (_) {}
 
     // 1. Generate a permanent, unique ID right now
-    final String sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
+    final metrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());  // New
 
     final result = SessionResult(
       id: sessionId, // 🚨 Use the permanent ID
@@ -1045,7 +1045,16 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       endTime: DateTime.now(),
       gazePoints: _gazePoints,
       attentionTimeline: _buildTimeline(),
+      metrics: metrics,        // New
     );
+    await FirestoreService().saveSession(result);
+
+    if (mounted) {
+    context.go('/session/complete', extra: result);   // ← الشاشة الوسيطة الجديدة
+  }
+
+    _bridge.stop();
+}
 
     // 2. "Fire and Forget"
     // We do NOT use 'await'. We just tell Firestore to save it. 

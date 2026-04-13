@@ -53,6 +53,12 @@ class ResultsScreen extends StatelessWidget {
 
             const SizedBox(height: 32),
 
+            // Advanced metrics (show when available)
+            if (result.metrics != null) ...[
+              const SizedBox(height: 24),
+              _AdvancedMetricsRow(result: result),
+            ],
+
            // ── Attention Timeline ──────────────────────────────
             if (hasTimeline) ...[
               const SizedBox(height: 32),
@@ -747,4 +753,43 @@ class _ExportButtonState extends State<_ExportButton> {
             ),
     );
   }
+  class _AdvancedMetricsRow extends StatelessWidget { // new
+  final SessionResult result;
+  const _AdvancedMetricsRow({required this.result});
+
+  @override                                             // new
+  Widget build(BuildContext context) {
+    final m = result.metrics!;
+    return Row(
+      children: [
+        Expanded(child: _MetricTile(title: 'أطول تركيز', value: '${m.maxFocusStreak.toStringAsFixed(1)} ث', icon: Icons.timer)),
+        const SizedBox(width: 16),
+        Expanded(child: _MetricTile(title: 'مؤشر الإرهاق', value: m.fatigueIndex.toStringAsFixed(2), icon: Icons.psychology, color: m.fatigueIndex > 0 ? Colors.orange : Colors.green)),
+        const SizedBox(width: 16),
+        Expanded(child: _MetricTile(title: 'تشتتات دقيقة', value: '${m.microDistractions}', icon: Icons.flash_on)),
+      ],
+    );
+  }
+}
+
+  class _MetricTile extends StatelessWidget {    // new
+  final String title, value;
+  final IconData icon;
+  final Color? color;
+  const _MetricTile({required this.title, required this.value, required this.icon, this.color});
+
+  @override                                           // new
+  Widget build(BuildContext context) {
+    return AppCard(  // لو مش موجود استخدم Container مع decoration
+      child: Column(
+        children: [
+          Icon(icon, size: 32, color: color ?? Theme.of(context).primaryColor),
+          const SizedBox(height: 8),
+          Text(title, style: Theme.of(context).textTheme.bodyMedium),
+          Text(value, style: Theme.of(context).textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+}
 }

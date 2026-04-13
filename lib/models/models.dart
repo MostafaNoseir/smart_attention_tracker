@@ -345,6 +345,9 @@ class SessionResult {
   final double? storedFocusPercentage;
   final double? storedDistractorResistance;
   final double? storedAvgRecoveryTime;
+  final double maxFocusStreak;           // new
+  final double fatigueIndex;             // new
+  final int microDistractions;           // new
 
   SessionResult({
     required this.id,
@@ -358,6 +361,9 @@ class SessionResult {
     this.storedFocusPercentage,
     this.storedDistractorResistance,
     this.storedAvgRecoveryTime,
+    required this.maxFocusStreak,       // new
+    required this.fatigueIndex,         // new
+    required this.microDistractions,    // new
   });
 
   int get durationSeconds => endTime.difference(startTime).inSeconds;
@@ -421,9 +427,20 @@ class SessionResult {
     'distractorResistance': distractorResistance,
     'avgRecoveryTime': avgRecoveryTime,
     'totalGazePoints': gazePoints.length,
+    'maxFocusStreak': maxFocusStreak,   // new
+    'fatigueIndex': fatigueIndex,   // new
+    'microDistractions': microDistractions,   // new
   };
+  factory SessionMetrics.fromFirestore(Map<String, dynamic> data) {    // new
+    return SessionMetrics(
+      maxFocusStreak: (data['maxFocusStreak'] as num?)?.toDouble() ?? 0.0,
+      fatigueIndex: (data['fatigueIndex'] as num?)?.toDouble() ?? 0.0,
+      microDistractions: (data['microDistractions'] as num?)?.toInt() ?? 0,
+    );
+  }
 }
 
+ 
 // ─── Calibration Data ─────────────────────────────────────────────
 class CalibrationPoint {
   final double screenX;
@@ -441,4 +458,72 @@ class CalibrationPoint {
     'screen_y': screenY,
     'gaze_samples': gazeSamples,
   };
+}
+
+// ─── تعديل SessionResult (أضف الحقول الجديدة) ───────────────────────────── // new
+
+SessionMetrics calculateSessionMetrics(List<GazePoint> points) {
+  if (points.isEmpty) {
+    return SessionMetrics(maxFocusStreak: 0, fatigueIndex: 0, microDistractions: 0);
+  }
+
+  points.sort((a, b) => a.timestampMs.compareTo(b.timestampMs));
+
+  final startTime = points.first.timestampMs / 1000.0;
+  final endTime = points.last.timestampMs / 1000.0;
+  final totalDuration = endTime - startTime;
+  if (totalDuration <= 0) return SessionMetrics(maxFocusStreak: 0, fatigueIndex: 0, microDistractions: 0);
+
+  double maxStreak = 0;
+  double currentStreak = 0;
+  double lastFocusTime = 0;
+
+  final halfTime = startTime + totalDuration / 2;
+  double focusFirstHalf = 0;
+  double focusSecondHalf = 0;
+
+  int microCount = 0;
+  bool wasFocused = points.first.isOnTarget;
+  double distractionStart = 0;
+
+  for (int i = 0; i < points.length; i++) {
+    final p = points[i];
+    final isFocused = p.isOnTarget;
+    final timeSec = p.timestampMs / 1000.0;
+
+    // 1. Max Focus Streak
+    if (isFocused) {
+      if (currentStreak == 0) lastFocusTime = timeSec;
+      currentStreak = timeSec - lastFocusTime;
+      if (currentStreak > maxStreak) maxStreak = currentStreak;
+    } else {
+      currentStreak = 0;
+    }
+
+    // 2. Fatigue Index
+    final durationThisFrame = i == 0 ? 0 : (timeSec - (points[i-1].timestampMs / 1000.0));
+    if (isFocused) {
+      if (timeSec <= halfTime) focusFirstHalf += durationThisFrame;
+      else focusSecondHalf += durationThisFrame;
+    }
+
+    // 3. Micro Distractions
+    if (wasFocused && !isFocused) {
+      distractionStart = timeSec;
+    } else if (!wasFocused && isFocused && distractionStart > 0) {
+      final distractionDuration = timeSec - distractionStart;
+      if (distractionDuration > 0 && distractionDuration < 1.0) microCount++;
+    }
+    wasFocused = isFocused;
+  }
+
+  final firstRatio = focusFirstHalf / (totalDuration / 2);
+  final secondRatio = focusSecondHalf / (totalDuration / 2);
+  final fatigueIndex = firstRatio - secondRatio;   // > 0 = إرهاق
+
+  return SessionMetrics(
+    maxFocusStreak: maxStreak,
+    fatigueIndex: fatigueIndex,
+    microDistractions: microCount,
+  );
 }
