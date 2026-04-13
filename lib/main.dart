@@ -62,6 +62,7 @@
 // }
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:eye_focus/firebase_options.dart';
@@ -102,23 +103,25 @@ class EyeFocusApp extends ConsumerWidget {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await windowManager.ensureInitialized();
 
+  if (!kIsWeb) {
+    await windowManager.ensureInitialized();
 
-  WindowOptions windowOptions = const WindowOptions(
-    size: Size(1200, 700),
-    minimumSize: Size(1000, 600),
-    center: true,
-    backgroundColor: Colors.transparent,
-    skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.normal, // <--- Ensure this is 'normal'
-    title: 'EyeFocus — Eye Tracking & Attention Analysis',
-  );
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(1200, 700),
+      minimumSize: Size(1000, 600),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal, // <--- Ensure this is 'normal'
+      title: 'EyeFocus — Eye Tracking & Attention Analysis',
+    );
 
-  await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
 
   runApp(const ProviderScope(child: EyeFocusApp()));
 }
