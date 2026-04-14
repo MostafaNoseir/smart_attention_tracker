@@ -444,6 +444,7 @@ class SessionResult {
       map['maxFocusStreak'] = metrics!.maxFocusStreak;
       map['fatigueIndex'] = metrics!.fatigueIndex;
       map['microDistractions'] = metrics!.microDistractions;
+      map['calibrationRetries'] = metrics!.calibrationRetries;
     }
     return map;
   }
@@ -453,17 +454,20 @@ class SessionMetrics {
   final double maxFocusStreak;
   final double fatigueIndex;
   final int microDistractions;
+  final int calibrationRetries;
 
   SessionMetrics({
     required this.maxFocusStreak,
     required this.fatigueIndex,
     required this.microDistractions,
+    this.calibrationRetries = 0,
   });
 
   Map<String, dynamic> toMap() => {
     'maxFocusStreak': maxFocusStreak,
     'fatigueIndex': fatigueIndex,
     'microDistractions': microDistractions,
+    'calibrationRetries': calibrationRetries,
   };
 
   factory SessionMetrics.fromFirestore(Map<String, dynamic> data) {
@@ -471,6 +475,7 @@ class SessionMetrics {
       maxFocusStreak: (data['maxFocusStreak'] as num?)?.toDouble() ?? 0.0,
       fatigueIndex: (data['fatigueIndex'] as num?)?.toDouble() ?? 0.0,
       microDistractions: (data['microDistractions'] as num?)?.toInt() ?? 0,
+      calibrationRetries: (data['calibrationRetries'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -577,5 +582,6 @@ SessionMetrics calculateSessionMetrics(List<GazePoint> points) {
     maxFocusStreak: maxStreak,
     fatigueIndex: fatigueIndex,
     microDistractions: microCount,
+    calibrationRetries: 0,
   );
 }

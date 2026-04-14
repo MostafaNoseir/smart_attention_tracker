@@ -75,6 +75,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             child: args['child'] as ChildProfile,
             config: args['config'] as SessionConfig,
             bridge: args['bridge'] as ModelBridge?,
+            calibrationRetries: (args['calibrationRetries'] as int?) ?? 0,
           );
         },
       ),

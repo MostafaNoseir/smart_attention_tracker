@@ -69,7 +69,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           _videoSaved = true;
           _tempVideoPath = null;
         });
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الفيديو'), backgroundColor: AppColors.success));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
         return;
       }
 
@@ -85,9 +85,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
         _videoSaved = true;
         _tempVideoPath = null;
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الفيديو'), backgroundColor: AppColors.success));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في الحفظ: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e'), backgroundColor: AppColors.danger));
     }
   }
 
@@ -110,10 +110,30 @@ class _ResultsScreenState extends State<ResultsScreen> {
         ),
         title: Text('Results — ${result.childName}'),
         actions: [
-          // _ExportButton(result: result),
-          // const SizedBox(width: 16),
-          // if (hasGazeData)
-           _ExportButton(result: result),
+          // Show save-video action when a temporary video exists
+          if (_tempVideoPath != null) Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: _videoSaved ? null : _saveVideo,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.surfaceBorder),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.save_alt_rounded, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Text(_videoSaved ? 'Saved' : 'Save video', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          _ExportButton(result: result),
           const SizedBox(width: 16),
         ],
       ),
@@ -138,17 +158,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _videoSaved ? 'تم حفظ فيديو الجلسة على جهازك' : 'تم تسجيل فيديو مؤقت خلال الجلسة. إذا غادرت الصفحة بدون حفظ سيُحذف.',
+                            _videoSaved ? 'Session video saved to your device' : 'A temporary session video was recorded. If you leave without saving it will be deleted.',
                             style: TextStyle(color: AppColors.textPrimary),
                           ),
-                          if (!_videoSaved)
-                            Text('يمكنك حفظ الفيديو الآن إلى جهازك.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                            if (!_videoSaved)
+                              Text('You can save the video now to your device.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                         ],
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: _videoSaved ? null : _saveVideo,
-                      child: Text(_videoSaved ? 'محفوظ' : 'حفظ الفيديو'),
+                        onPressed: _videoSaved ? null : _saveVideo,
+                        child: Text(_videoSaved ? 'Saved' : 'Save video'),
                     ),
                   ],
                 ),
@@ -873,11 +893,13 @@ class _AdvancedMetricsRow extends StatelessWidget {
     final m = metrics;
     return Row(
       children: [
-        Expanded(child: _MetricTile(title: 'Max Focus Streak', value: '${m.maxFocusStreak.toStringAsFixed(1)} ', icon: Icons.timer)),
+        Expanded(child: _MetricTile(title: 'Max Focus streak', value: '${m.maxFocusStreak.toStringAsFixed(1)}', icon: Icons.timer)),
         const SizedBox(width: 16),
         Expanded(child: _MetricTile(title: 'Fatigue Index', value: m.fatigueIndex.toStringAsFixed(2), icon: Icons.psychology, color: m.fatigueIndex > 0 ? Colors.orange : Colors.green)),
         const SizedBox(width: 16),
-        Expanded(child: _MetricTile(title: 'Micro-Distractions', value: '${m.microDistractions}', icon: Icons.flash_on)),
+        Expanded(child: _MetricTile(title: 'Micro Distractions', value: '${m.microDistractions}', icon: Icons.flash_on)),
+        const SizedBox(width: 16),
+        Expanded(child: _MetricTile(title: 'Calibration retries', value: '${m.calibrationRetries}', icon: Icons.replay)),
       ],
     );
   }
@@ -904,4 +926,3 @@ class _MetricTile extends StatelessWidget {
     );
   }
 }
- 

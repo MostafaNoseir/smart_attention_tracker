@@ -67,7 +67,7 @@ class FirestoreService {
     final d = doc.data() as Map<String, dynamic>;
     SessionMetrics? metrics;
     try {
-      if (d.containsKey('maxFocusStreak') || d.containsKey('fatigueIndex') || d.containsKey('microDistractions')) {
+      if (d.containsKey('maxFocusStreak') || d.containsKey('fatigueIndex') || d.containsKey('microDistractions') || d.containsKey('calibrationRetries')) {
         metrics = SessionMetrics.fromFirestore(d);
       }
     } catch (_) {
@@ -193,44 +193,51 @@ class FirestoreService {
     final sessionTime = DateFormat('yyyy-MM-dd_HH-mm-ss').format(result.startTime);
     final fileName = 'Session_${result.childName}_$sessionTime.csv';
 
-    final avgRec = result.avgRecoveryTime;
-    final recoveryText = avgRec > 0 ? "${avgRec.toStringAsFixed(2)}s" : "Perfect (No Distractions)";
+    // Try to fetch child's age from children collection
+    String childAge = '';
+    try {
+      final doc = await _children.doc(result.childId).get();
+      final d = doc.data() as Map<String, dynamic>?;
+      if (d != null && d.containsKey('age')) childAge = (d['age'] as num).toInt().toString();
+    } catch (_) {
+      childAge = '';
+    }
 
-    final rows = [
-      ["Time_Sec", "Target_X", "Target_Y", "Gaze_X", "Gaze_Y", "Distractor_Active", "Distance", "Focus_Status"],
-      ...result.gazePoints.map((p) => p.toCsvRow()),
-      [], 
-      ["---", "---", "---", "---", "---", "---", "---", "---"],
-      [
-        "SESSION_SUMMARY", 
-        "Status: Completed", 
-        "Final_Focus: ${result.focusPercentage.toStringAsFixed(1)}%", 
-        "Avg_Recovery: $recoveryText",
-      ]
+    // Use persisted metrics if present, otherwise compute a summary
+    final m = result.metrics ?? calculateSessionMetrics(result.gazePoints);
+
+    // Export only summary metadata and metrics (no per-frame data)
+    final headers = [
+      'ChildName', 'ChildAge', 'Speed', 'DurationSec',
+      'FocusRate', 'DistractorResistance',
+      'MaxFocusStreak(s)', 'FatigueIndex', 'MicroDistractions', 'CalibrationRetries'
     ];
 
-    // Append advanced metrics to the summary (always include - calculate if missing)
-    final m = result.metrics ?? calculateSessionMetrics(result.gazePoints);
-    rows.add(['', '', '', '']); // فاصل
-    rows.add(['Max Focus Streak (s)', m.maxFocusStreak.toStringAsFixed(2), '', '']);
-    rows.add(['Fatigue Index', m.fatigueIndex.toStringAsFixed(3), '', '']);
-    rows.add(['Micro Distractions', m.microDistractions.toString(), '', '']);
+    final dataRow = [
+      result.childName,
+      childAge,
+      result.config.speed.label,
+      result.durationSeconds.toString(),
+      result.focusPercentage.toStringAsFixed(1),
+      result.distractorResistance.toStringAsFixed(1),
+      m.maxFocusStreak.toStringAsFixed(2),
+      m.fatigueIndex.toStringAsFixed(3),
+      m.microDistractions.toString(),
+      m.calibrationRetries.toString(),
+    ];
 
+    final rows = [headers, dataRow];
     final csvContent = rows.map((r) => r.join(',')).join('\n');
-    
-    // Convert the string to a Uint8List synchronously
     final Uint8List fileBytes = Uint8List.fromList(utf8.encode(csvContent));
 
-    // Open Save File Dialog
     String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'Please select where to save your report:',
       fileName: fileName,
       type: FileType.custom,
       allowedExtensions: ['csv'],
-      bytes: fileBytes, // This is now a clean Uint8List
+      bytes: fileBytes,
     );
 
-    // Write the file if the user didn't cancel
     if (outputFile != null) {
       final file = File(outputFile);
       await file.writeAsString(csvContent);

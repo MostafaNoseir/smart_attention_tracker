@@ -738,6 +738,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   StreamSubscription<GazeData>? _gazeSub;
   final List<CalibrationPoint> _collectedPoints = [];
   GazeData? _latestGaze;
+  int _calibrationRetries = 0;
   final FocusNode _focusNode = FocusNode();
 
   @override
@@ -793,6 +794,8 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         if (msg == 'calibration_done' && success) {
           setState(() => _isDone = true);
         } else if (msg == 'calibration_failed' || !success) {
+          // increment retry counter so we can store this metric later
+          _calibrationRetries++;
           
           // Determine reason for failure
           final reason = data['reason'] ?? 'unknown';
@@ -973,6 +976,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         'child': widget.child,
         'config': widget.config,
         'bridge': _bridge,
+        'calibrationRetries': _calibrationRetries,
       },
     );
   }

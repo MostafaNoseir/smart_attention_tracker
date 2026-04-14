@@ -48,7 +48,7 @@ class AuthService {
   try {
     await _auth.sendPasswordResetEmail(email: email.trim());
   } on FirebaseAuthException catch (e) {
-    throw Exception(e.message ?? 'حدث خطأ أثناء إرسال الرابط');
+    throw Exception(e.message ?? 'An error occurred while sending the reset link');
   }
 }
 }

@@ -684,12 +684,14 @@ class LiveSessionScreen extends StatefulWidget {
   final ChildProfile child;
   final SessionConfig config;
   final ModelBridge? bridge;
+  final int calibrationRetries;
 
   const LiveSessionScreen({
     super.key,
     required this.child,
     required this.config,
     this.bridge,
+    this.calibrationRetries = 0,
   });
 
   @override
@@ -1099,7 +1101,16 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     } catch (_) {}
 
     // 1. Generate a permanent, unique ID right now
-    final metrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());
+    // 1. Generate a permanent, unique ID right now
+    final baseMetrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());
+
+    // include calibration retries reported by the calibration flow
+    final metrics = SessionMetrics(
+      maxFocusStreak: baseMetrics.maxFocusStreak,
+      fatigueIndex: baseMetrics.fatigueIndex,
+      microDistractions: baseMetrics.microDistractions,
+      calibrationRetries: widget.calibrationRetries,
+    );
 
     final sessionId = 'local_${DateTime.now().millisecondsSinceEpoch}';
 
