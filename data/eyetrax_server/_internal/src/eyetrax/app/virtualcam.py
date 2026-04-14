@@ -23,6 +23,8 @@ from eyetrax.utils.draw import draw_cursor
 from eyetrax.utils.screen import get_screen_size
 from eyetrax.utils.video import camera, iter_frames
 
+from data.eyetrax_server._internal.src.eyetrax.utils.video import record_session
+
 
 def run_virtualcam():
     args = parse_common_args()
@@ -74,7 +76,8 @@ def run_virtualcam():
     green_bg = np.zeros((screen_height, screen_width, 3), dtype=np.uint8)
     green_bg[:] = (0, 255, 0)
 
-    with camera(camera_index) as cap:
+    # ─── بداية السيشن مع تسجيل الفيديو ─────────────────────────────
+    with record_session() as (cap, writer):
         cam_fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
         with pyvirtualcam.Camera(
             width=screen_width,
@@ -83,7 +86,12 @@ def run_virtualcam():
             fmt=pyvirtualcam.PixelFormat.BGR,
         ) as cam:
             print(f"Virtual camera started: {cam.device}")
+            
             for frame in iter_frames(cap):
+                # === تسجيل الفريم في الفيديو (السطر الجديد) ===
+                writer.write(frame)
+
+                # باقي الكود القديم بدون تغيير
                 features, blink_detected = gaze_estimator.extract_features(frame)
 
                 if features is not None and not blink_detected:
@@ -111,7 +119,3 @@ def run_virtualcam():
 
                 cam.send(output)
                 cam.sleep_until_next_frame()
-
-
-if __name__ == "__main__":
-    run_virtualcam()

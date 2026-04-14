@@ -23,6 +23,8 @@ from eyetrax.utils.draw import draw_cursor, make_thumbnail
 from eyetrax.utils.screen import get_screen_size
 from eyetrax.utils.video import camera, fullscreen, iter_frames
 
+from data.eyetrax_server._internal.src.eyetrax.utils.video import record_session
+
 
 def run_demo():
     args = parse_common_args()
@@ -85,10 +87,15 @@ def run_demo():
     cursor_alpha = 0.0
     cursor_step = 0.05
 
-    with camera(camera_index) as cap, fullscreen("Gaze Estimation"):
+    # ─── بداية السيشن مع تسجيل الفيديو ─────────────────────────────
+    with record_session() as (cap, writer), fullscreen("Gaze Estimation"):
         prev_time = time.time()
 
         for frame in iter_frames(cap):
+            # === تسجيل الفريم في الفيديو (السطر الجديد) ===
+            writer.write(frame)
+
+            # باقي الكود القديم بدون تغيير
             features, blink_detected = gaze_estimator.extract_features(frame)
 
             if features is not None and not blink_detected:
@@ -145,7 +152,3 @@ def run_demo():
             cv2.imshow("Gaze Estimation", canvas)
             if cv2.waitKey(1) == 27:
                 break
-
-
-if __name__ == "__main__":
-    run_demo()
