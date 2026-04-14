@@ -245,4 +245,16 @@ class FirestoreService {
       throw Exception("Export cancelled");
     }
   }
+
+  /// Remove the temporary video path from the session document so the UI
+  /// no longer offers the one-time save after the video has been persisted
+  /// by the user.
+  Future<void> clearSessionTempVideo(String sessionId) async {
+    try {
+      await _sessions.doc(sessionId).update({'tempVideoPath': FieldValue.delete()});
+    } catch (e) {
+      // non-fatal: if the field doesn't exist or update fails, ignore
+      debugPrint('[FirestoreService] clearSessionTempVideo error: $e');
+    }
+  }
 }

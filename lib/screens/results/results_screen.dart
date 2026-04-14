@@ -27,6 +27,15 @@ class _ResultsScreenState extends State<ResultsScreen> {
   void initState() {
     super.initState();
     _tempVideoPath = widget.result.tempVideoPath;
+    // If the temp path was provided but the file no longer exists, hide the save option.
+    if (_tempVideoPath != null) {
+      try {
+        final f = File(_tempVideoPath!);
+        if (!f.existsSync()) _tempVideoPath = null;
+      } catch (_) {
+        _tempVideoPath = null;
+      }
+    }
   }
 
   @override
@@ -69,6 +78,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
           _videoSaved = true;
           _tempVideoPath = null;
         });
+        // Clear the tempVideoPath from Firestore so returning to this session
+        // later will not show the save option.
+        try {
+          await FirestoreService().clearSessionTempVideo(widget.result.id);
+        } catch (_) {}
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
         return;
       }
@@ -85,6 +99,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
         _videoSaved = true;
         _tempVideoPath = null;
       });
+      try {
+        await FirestoreService().clearSessionTempVideo(widget.result.id);
+      } catch (_) {}
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e'), backgroundColor: AppColors.danger));
@@ -110,25 +127,28 @@ class _ResultsScreenState extends State<ResultsScreen> {
         ),
         title: Text('Results — ${result.childName}'),
         actions: [
-          // Show save-video action when a temporary video exists
-          if (_tempVideoPath != null) Padding(
+          // Save video button (always shown; disabled when no temp video or already saved)
+          Padding(
             padding: const EdgeInsets.only(right: 8),
             child: GestureDetector(
-              onTap: _videoSaved ? null : _saveVideo,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.surfaceBorder),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.save_alt_rounded, size: 16, color: AppColors.textSecondary),
-                    const SizedBox(width: 8),
-                    Text(_videoSaved ? 'Saved' : 'Save video', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                  ],
+              onTap: (_tempVideoPath == null || _videoSaved) ? null : () { _saveVideo(); },
+              child: Opacity(
+                opacity: (_tempVideoPath == null || _videoSaved) ? 0.5 : 1.0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.surfaceBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.save_alt_rounded, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Text(_videoSaved ? 'Saved' : 'Save video', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    ],
+                  ),
                 ),
               ),
             ),

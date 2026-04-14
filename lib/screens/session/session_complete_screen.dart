@@ -11,7 +11,7 @@ class SessionCompleteScreen extends StatelessWidget {
 	Widget build(BuildContext context) {
 		return Scaffold(
 			appBar: AppBar(
-				title: const Text('انتهت الجلسة'),
+				title: const Text('Session Complete'),
 				backgroundColor: AppColors.surface,
 			),
 			backgroundColor: AppColors.background,
@@ -23,13 +23,13 @@ class SessionCompleteScreen extends StatelessWidget {
 						children: [
 							Icon(Icons.check_circle_outline, size: 64, color: AppColors.success),
 							const SizedBox(height: 16),
-							Text('تم الانتهاء من الجلسة', style: TextStyle(fontSize: 20, color: AppColors.textPrimary)),
+							Text('Session Complete', style: TextStyle(fontSize: 20, color: AppColors.textPrimary)),
 							const SizedBox(height: 8),
-							Text('يمكنك الآن عرض النتائج', style: TextStyle(color: AppColors.textSecondary)),
+							Text('You can now view the results', style: TextStyle(color: AppColors.textSecondary)),
 							const SizedBox(height: 24),
 							ElevatedButton(
 								onPressed: () => context.go('/results/${result.id}', extra: result),
-								child: const Text('عرض النتائج'),
+								child: const Text('View Results'),
 							),
 						],
 					),
