@@ -689,13 +689,72 @@ class ModelBridge {
   void resume() => _isPaused = false;
 
   Future<void> stop() async {
-    _isDisposed = true; 
-    sendCommand({'command': 'stop'});
-    await _channel?.sink.close();
+    // Idempotent shutdown
+    if (_isDisposed) {
+      debugPrint('[ModelBridge] stop() called but already disposed.');
+      return;
+    }
+    _isDisposed = true;
+
+    // Stop reconnect attempts
+    _isReconnecting = false;
+    _isConnected = false;
+
+    // Ask the server to stop politely (best-effort)
+    try {
+      sendCommand({'command': 'stop'});
+    } catch (e) {
+      debugPrint('[ModelBridge] send stop command failed: $e');
+    }
+
+    // Close websocket channel
+    try {
+      await _channel?.sink.close();
+    } catch (e) {
+      debugPrint('[ModelBridge] Error closing WS sink: $e');
+    }
     _channel = null;
-    
-    _serverProcess?.kill();
-    _serverProcess = null;
+
+    // If there is a spawned server process, try graceful exit then force-kill
+    if (_serverProcess != null) {
+      final proc = _serverProcess!;
+      int? exitCode;
+      try {
+        // Try polite termination first
+        try {
+          proc.kill(ProcessSignal.sigterm);
+        } catch (e) {
+          debugPrint('[ModelBridge] sigterm failed (platform?): $e');
+          try {
+            proc.kill();
+          } catch (_) {}
+        }
+
+        // Wait up to 5s for process to exit
+        try {
+          exitCode = await proc.exitCode.timeout(const Duration(seconds: 5));
+          debugPrint('[ModelBridge] Python server exited with code $exitCode');
+        } catch (e) {
+          debugPrint('[ModelBridge] Process did not exit in time: $e — attempting force kill');
+          try {
+            proc.kill(ProcessSignal.sigkill);
+          } catch (e2) {
+            debugPrint('[ModelBridge] Force-kill failed: $e2');
+          }
+          try {
+            exitCode = await proc.exitCode.timeout(const Duration(seconds: 2));
+            debugPrint('[ModelBridge] Python server force-exited with code $exitCode');
+          } catch (_) {
+            debugPrint('[ModelBridge] Force-exit wait timed out');
+          }
+        }
+      } catch (e) {
+        debugPrint('[ModelBridge] Error while stopping server process: $e');
+      } finally {
+        _serverProcess = null;
+      }
+    }
+
     debugPrint('[ModelBridge] Stopped Python server process.');
   }
 

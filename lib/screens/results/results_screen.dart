@@ -9,7 +9,6 @@ import 'package:path/path.dart' as p;
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import '../../models/models.dart';
-import '../../services/firestore_service.dart';
 
 class ResultsScreen extends StatefulWidget {
   final SessionResult result;
@@ -78,11 +77,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
           _videoSaved = true;
           _tempVideoPath = null;
         });
-        // Clear the tempVideoPath from Firestore so returning to this session
-        // later will not show the save option.
-        try {
-          await FirestoreService().clearSessionTempVideo(widget.result.id);
-        } catch (_) {}
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
         return;
       }
@@ -99,9 +93,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
         _videoSaved = true;
         _tempVideoPath = null;
       });
-      try {
-        await FirestoreService().clearSessionTempVideo(widget.result.id);
-      } catch (_) {}
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e'), backgroundColor: AppColors.danger));
@@ -946,3 +937,4 @@ class _MetricTile extends StatelessWidget {
     );
   }
 }
+ 

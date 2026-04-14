@@ -679,6 +679,8 @@ import 'package:camera/camera.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import 'package:web_socket_channel/io.dart';
+import 'dart:convert';
 
 class LiveSessionScreen extends StatefulWidget {
   final ChildProfile child;
@@ -710,6 +712,13 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   CameraController? _cameraController;
   bool _isRecordingVideo = false;
   String? _tempVideoPath;
+
+  // Frame streaming (prototype)
+  IOWebSocketChannel? _frameChannel;
+  Timer? _frameSendTimer;
+  bool _frameStreamingEnabled = false;
+  String? _frameStreamUrl;
+  int _frameFailCount = 0;
 
   Offset _targetPos = const Offset(0.395, 0.384);
   final _rand = Random();
@@ -809,6 +818,10 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _bridge = widget.bridge ?? ModelBridge();
     _sessionStart = DateTime.now();
+
+    // Configure frame streaming (non-invasive)
+    _frameStreamingEnabled = widget.config.enableFrameStreaming;
+    _frameStreamUrl = widget.config.frameStreamUrl;
 
     double speedMultiplier = widget.config.speed.pixelsPerSecond / 160.0;
     _speedX = (12.0 * speedMultiplier) / 1920.0;
@@ -948,8 +961,71 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     _initCamera().then((_) async {
       if (_cameraController != null && _cameraController!.value.isInitialized) {
         await _startRecording();
+        // Start frame streaming if configured (non-invasive: do not pause/stop model)
+        if (_frameStreamingEnabled && _frameStreamUrl != null && _frameStreamUrl!.isNotEmpty) {
+          _startFrameSender();
+        }
       }
     });
+  }
+
+  Future<void> _startFrameSender() async {
+    if (_frameChannel != null || _frameStreamUrl == null) return;
+    try {
+      _frameChannel = IOWebSocketChannel.connect(Uri.parse(_frameStreamUrl!));
+      debugPrint('[LiveSession] Frame stream connected to $_frameStreamUrl');
+    } catch (e) {
+      debugPrint('[LiveSession] Frame stream connection failed: $e');
+      _frameChannel = null;
+      return;
+    }
+
+    // Send a small hello with session info
+    try {
+      _frameChannel!.sink.add(jsonEncode({
+        'type': 'session_start',
+        'sessionId': 'local_${DateTime.now().millisecondsSinceEpoch}',
+        'childId': widget.child.id,
+      }));
+    } catch (_) {}
+
+    _frameSendTimer = Timer.periodic(const Duration(milliseconds: 250), (t) async {
+      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+      try {
+        final XFile pic = await _cameraController!.takePicture();
+        final bytes = await pic.readAsBytes();
+        final payload = jsonEncode({
+          'type': 'frame',
+          'ts': DateTime.now().millisecondsSinceEpoch,
+          'sessionId': 'local_${_sessionStart.millisecondsSinceEpoch}',
+          'format': 'jpeg',
+          'size': bytes.length
+        });
+        // Send header then binary as text (prototype). Server must handle accordingly.
+        _frameChannel!.sink.add(payload);
+        _frameChannel!.sink.add(bytes);
+        _frameFailCount = 0;
+      } catch (e) {
+        _frameFailCount++;
+        debugPrint('[LiveSession] frame send error #$_frameFailCount: $e');
+        if (_frameFailCount > 6) {
+          debugPrint('[LiveSession] Too many frame errors, stopping frame sender.');
+          _stopFrameSender();
+        }
+      }
+    });
+  }
+
+  void _stopFrameSender() {
+    try {
+      _frameSendTimer?.cancel();
+      _frameSendTimer = null;
+    } catch (_) {}
+    try {
+      _frameChannel?.sink.close();
+      _frameChannel = null;
+    } catch (_) {}
+    _frameFailCount = 0;
   }
 
   void _recordGazePoint() {
@@ -1096,6 +1172,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     try { await _audioPlayer.dispose(); } catch (_) {}
 
     // Stop recording (if any) and attach temp path to the result
+    // Stop frame sender (if any) then stop recording
+    try { _stopFrameSender(); } catch (_) {}
     try {
       await _stopRecording();
     } catch (_) {}
@@ -1151,6 +1229,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     _changeDirTimer?.cancel();
     _loggingTimer.cancel();
     _gazeSub?.cancel();
+    try { _stopFrameSender(); } catch (_) {}
     try { await _stopRecording(); } catch (_) {}
     try { await _bridge.stop(); } catch (_) {}
     try { await _audioPlayer.stop(); } catch (_) {}
@@ -1171,12 +1250,6 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   }
 
   Future<bool> _confirmExit() async {
-    // Pause the session while the dialog is open
-    final wasPaused = _isPaused;
-    setState(() => _isPaused = true);
-    _bridge.pause();
-    _audioPlayer.pause();
-
     final shouldExit = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1208,15 +1281,9 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     if (shouldExit == true) {
       await _abortSession();
       return true;
-    } else {
-      // Resume if they canceled the exit and the session wasn't already paused
-      if (!wasPaused) {
-        setState(() => _isPaused = false);
-        _bridge.resume();
-        if (widget.config.musicPath != null) _audioPlayer.resume();
-      }
-      return false;
     }
+
+    return false;
   }
 
   List<AttentionSpan> _buildTimeline() {
@@ -1429,18 +1496,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                   child: _HUDBar(
                     remaining: remaining,
                     progress: progress,
-                    isPaused: _isPaused,
-                    onPause: () {
-                      setState(() => _isPaused = !_isPaused);
-                      if (_isPaused) {
-                        _bridge.pause();
-                        _audioPlayer.pause();
-                      } else {
-                        _bridge.resume();
-                        if (widget.config.musicPath != null)
-                          _audioPlayer.resume();
-                      }
-                    },
+                    isPaused: false,
+                    onPause: () {},
                     onStop: _endSession,
                   ),
                 ),
@@ -1488,33 +1545,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                             .fadeOut(),
                   ),
         
-                if (_isPaused)
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black.withOpacity(0.7),
-                      child: const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.pause_circle_outline_rounded,
-                              color: AppColors.primary,
-                              size: 64,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'Session paused',
-                              style: TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                // Manual pause disabled to avoid changing the external model state.
               ],
             ),
           ),
@@ -1556,6 +1587,9 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     _gazeSub?.cancel();
     try {
       _audioPlayer.dispose();
+    } catch (_) {}
+    try {
+      _stopFrameSender();
     } catch (_) {}
     try {
       await _stopRecording();
