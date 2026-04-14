@@ -81,7 +81,7 @@ def record_session(output_path: str | None = None):
     print(f"🎥 Recording started → {output_path}")
 
     try:
-        yield cap, writer          # ← بنرجع الكاميرا + الـ writer
+        yield cap, writer, output_path   # ← أضفنا output_path كـ third value
     finally:
         writer.release()
         cap.release()
