@@ -176,6 +176,8 @@ class SessionConfig {
 
   final String? musicPath; // مسار الملف في الجهاز (C:\Music\song.mp3)
   final String? musicName; // اسم الأغنية (song.mp3)
+  final bool enableFrameStreaming; // whether to stream frames to an external endpoint
+  final String? frameStreamUrl; // ws://host:port/path optionally
 
   SessionConfig({
     this.targetShape = TargetShape.rocket,
@@ -187,6 +189,8 @@ class SessionConfig {
     this.enableSound = false,
     this.musicPath,
     this.musicName,
+    this.enableFrameStreaming = false,
+    this.frameStreamUrl,
   });
 
   SessionConfig copyWith({
@@ -223,6 +227,8 @@ class SessionConfig {
     'durationMinutes': duration.seconds,
     'enableSound': enableSound,
     'musicName': musicName,
+    'enableFrameStreaming': enableFrameStreaming,
+    'frameStreamUrl': frameStreamUrl,
   };
 }
 

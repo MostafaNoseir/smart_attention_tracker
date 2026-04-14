@@ -227,4 +227,10 @@ class FirestoreService {
       throw Exception("Export cancelled");
     }
   }
+<<<<<<< Updated upstream
+=======
+
+  // Note: temporary session videos are kept local only and are not uploaded
+  // to Firebase Storage. The app will not write video file paths into Firestore.
+>>>>>>> Stashed changes
 }

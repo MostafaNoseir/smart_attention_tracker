@@ -9,7 +9,6 @@ import 'package:path/path.dart' as p;
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import '../../models/models.dart';
-import '../../services/firestore_service.dart';
 
 class ResultsScreen extends StatefulWidget {
   final SessionResult result;
@@ -54,9 +53,46 @@ class _ResultsScreenState extends State<ResultsScreen> {
     if (destDir == null) return; // user cancelled
     final destPath = p.join(destDir, suggestedName);
     try {
+<<<<<<< Updated upstream
       await src.copy(destPath);
       setState(() => _videoSaved = true);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الفيديو')));
+=======
+      // Prefer saveFile dialog (desktop-friendly)
+      final output = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save session video',
+        fileName: suggestedName,
+        type: FileType.custom,
+        allowedExtensions: ['mp4'],
+      );
+
+      if (output != null) {
+        await src.copy(output);
+        try {
+          if (await src.exists()) await src.delete();
+        } catch (_) {}
+        setState(() {
+          _videoSaved = true;
+          _tempVideoPath = null;
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
+        return;
+      }
+
+      // Fallback: directory picker + copy
+      final destDir = await FilePicker.platform.getDirectoryPath();
+      if (destDir == null) return;
+      final destPath = p.join(destDir, suggestedName);
+      await src.copy(destPath);
+      try {
+        if (await src.exists()) await src.delete();
+      } catch (_) {}
+      setState(() {
+        _videoSaved = true;
+        _tempVideoPath = null;
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
+>>>>>>> Stashed changes
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في الحفظ: $e')));
     }
