@@ -1092,23 +1092,41 @@ Future<void> _endSession() async {
   _changeDirTimer?.cancel();
   _loggingTimer.cancel();
   _audioPlayer.stop();
-  
+
   try { await _audioPlayer.stop(); } catch (_) {}
   try { await _audioPlayer.dispose(); } catch (_) {}
 
-  // Stop recording (if any)
+  // Stop Flutter camera recording (الفيديو بتاع وجه الطفل)
   try {
     await _stopRecording();
   } catch (_) {}
 
-  // ─── الجزء المهم الجديد ───
-  // أرسل أمر stop للسيرفر علشان يبعت session_end + temp_video_path
+  // ─── أرسل stop للسيرفر (Python) ───
   try {
-    await _bridge.sendCommand({"command": "stop"});   // ← هذا السطر الجديد
-    await Future.delayed(const Duration(milliseconds: 600)); // انتظر الرد
+    await _bridge.sendCommand({"command": "stop"});
+    await Future.delayed(const Duration(milliseconds: 800));
     print("📤 Sent STOP command to Python server");
   } catch (e) {
     print("Failed to send stop command: $e");
+  }
+
+  // ─── FALLBACK: خد آخر فيديو من Python في %TEMP% ───
+  try {
+    final tempDir = Directory.systemTemp;
+    final files = tempDir.listSync()
+        .whereType<File>()
+        .where((f) => f.path.contains('eye_focus_session_') && f.path.endsWith('.avi'))
+        .toList();
+
+    if (files.isNotEmpty) {
+      files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+      _tempVideoPath = files.first.path;
+      print("🔍 Found latest Python video: $_tempVideoPath");
+    } else {
+      print("⚠️ No Python video found in TEMP");
+    }
+  } catch (e) {
+    print("Failed to find Python video in TEMP: $e");
   }
 
   final baseMetrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());
@@ -1132,7 +1150,7 @@ Future<void> _endSession() async {
     gazePoints: _gazePoints,
     attentionTimeline: _buildTimeline(),
     metrics: metrics,
-    tempVideoPath: _tempVideoPath,   // ← هنا هيجي المسار من Python
+    tempVideoPath: _tempVideoPath,   // ← هنا هيجي الفيديو بتاع Python
   );
 
   final service = FirestoreService();
