@@ -27,7 +27,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   void initState() {
     super.initState();
     _tempVideoPath = widget.result.tempVideoPath;
-    // If the temp path was provided but the file no longer exists, hide the save option.
+
     if (_tempVideoPath != null) {
       try {
         final f = File(_tempVideoPath!);
@@ -40,71 +40,56 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   @override
   void dispose() {
-    // If the video wasn't explicitly saved, delete the temporary file when leaving.
-    if (!_videoSaved && _tempVideoPath != null) {
+    // ←←← هنا بنعمل "consume" للفيديو عشان المرة الجاية الزر يكون معطل
+    if (_tempVideoPath != null) {
       try {
-        final f = File(_tempVideoPath!);
-        if (f.existsSync()) f.deleteSync();
+        FirestoreService().clearSessionTempVideo(widget.result.id);
       } catch (_) {}
     }
     super.dispose();
   }
 
-  Future<void> _saveVideo() async {
+      Future<void> _saveVideo() async {
     if (_tempVideoPath == null) return;
+
     final src = File(_tempVideoPath!);
     if (!await src.exists()) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Temporary video not found')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Temporary video not found')),
+        );
+      }
       return;
     }
 
-    final suggestedName = 'session_${widget.result.childName}_${widget.result.id}.mp4';
+    final suggestedName = 'session_${widget.result.childName}_${widget.result.id}.avi';
 
     try {
-      // Prefer saveFile dialog (desktop-friendly)
       final output = await FilePicker.platform.saveFile(
         dialogTitle: 'Save session video',
         fileName: suggestedName,
         type: FileType.custom,
-        allowedExtensions: ['mp4'],
+        allowedExtensions: ['avi'],
       );
 
       if (output != null) {
         await src.copy(output);
-        try {
-          if (await src.exists()) await src.delete();
-        } catch (_) {}
-        setState(() {
-          _videoSaved = true;
-          _tempVideoPath = null;
-        });
-        // Clear the tempVideoPath from Firestore so returning to this session
-        // later will not show the save option.
-        try {
-          await FirestoreService().clearSessionTempVideo(widget.result.id);
-        } catch (_) {}
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
-        return;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Video saved successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+        // ←←← مهم: ما بنمسحش أي حاجة ولا بنعطل الزر
       }
-
-      // Fallback: directory picker + copy
-      final destDir = await FilePicker.platform.getDirectoryPath();
-      if (destDir == null) return;
-      final destPath = p.join(destDir, suggestedName);
-      await src.copy(destPath);
-      try {
-        if (await src.exists()) await src.delete();
-      } catch (_) {}
-      setState(() {
-        _videoSaved = true;
-        _tempVideoPath = null;
-      });
-      try {
-        await FirestoreService().clearSessionTempVideo(widget.result.id);
-      } catch (_) {}
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video saved'), backgroundColor: AppColors.success));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e'), backgroundColor: AppColors.danger));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving: $e'), backgroundColor: AppColors.danger),
+        );
+      }
     }
   }
 
@@ -131,9 +116,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: GestureDetector(
-              onTap: (_tempVideoPath == null || _videoSaved) ? null : () { _saveVideo(); },
+              onTap: _tempVideoPath == null ? null : () => _saveVideo(),
               child: Opacity(
-                opacity: (_tempVideoPath == null || _videoSaved) ? 0.5 : 1.0,
+                opacity: _tempVideoPath == null ? 0.5 : 1.0,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
@@ -146,7 +131,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     children: [
                       Icon(Icons.save_alt_rounded, size: 16, color: AppColors.textSecondary),
                       const SizedBox(width: 8),
-                      Text(_videoSaved ? 'Saved' : 'Save video', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('Save video', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -167,34 +152,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
               .animate().fadeIn().slideY(begin: -0.05),
 
             const SizedBox(height: 32),
-
-            // Temporary video note + save button (transient)
-            if (_tempVideoPath != null) ...[
-              AppCard(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _videoSaved ? 'Session video saved to your device' : 'A temporary session video was recorded. If you leave without saving it will be deleted.',
-                            style: TextStyle(color: AppColors.textPrimary),
-                          ),
-                            if (!_videoSaved)
-                              Text('You can save the video now to your device.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton(
-                        onPressed: _videoSaved ? null : _saveVideo,
-                        child: Text(_videoSaved ? 'Saved' : 'Save video'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
 
             // ── Stats row ───────────────────────────────────────
             _StatsRow(result: result)
