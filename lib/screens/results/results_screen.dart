@@ -49,7 +49,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
     super.dispose();
   }
 
-      Future<void> _saveVideo() async {
+  Future<void> _saveVideo() async {
     if (_tempVideoPath == null) return;
 
     final src = File(_tempVideoPath!);
@@ -62,7 +62,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       return;
     }
 
-    final suggestedName = 'session_${widget.result.childName}_${widget.result.id}.avi';
+    String suggestedName = 'session_${widget.result.childName}_${widget.result.id}.avi';
 
     try {
       final output = await FilePicker.platform.saveFile(
@@ -73,7 +73,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
       );
 
       if (output != null) {
-        await src.copy(output);
+        // إضافة الامتداد تلقائياً لو المستخدم نسيه
+        String finalPath = output;
+        if (!finalPath.toLowerCase().endsWith('.avi')) {
+          finalPath = '$finalPath.avi';
+        }
+
+        await src.copy(finalPath);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -82,7 +88,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
             ),
           );
         }
-        // ←←← مهم: ما بنمسحش أي حاجة ولا بنعطل الزر
       }
     } catch (e) {
       if (mounted) {
