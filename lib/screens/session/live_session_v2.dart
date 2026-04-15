@@ -1084,66 +1084,69 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   //   }
   // }
 
-  Future<void> _endSession() async {
-    if (!_isRunning) return;
-    _isRunning = false;
-    _sessionTimer.cancel();
-    _changeDirTimer?.cancel();
-    _loggingTimer.cancel();
-    _audioPlayer.stop();
-    
-    try { await _audioPlayer.stop(); } catch (_) {}
-    try { await _audioPlayer.dispose(); } catch (_) {}
+Future<void> _endSession() async {
+  if (!_isRunning) return;
+  _isRunning = false;
 
-    // Stop recording (if any) and attach temp path to the result
-    try {
-      await _stopRecording();
-    } catch (_) {}
+  _sessionTimer.cancel();
+  _changeDirTimer?.cancel();
+  _loggingTimer.cancel();
+  _audioPlayer.stop();
+  
+  try { await _audioPlayer.stop(); } catch (_) {}
+  try { await _audioPlayer.dispose(); } catch (_) {}
 
-    // 1. Generate a permanent, unique ID right now
-    // 1. Generate a permanent, unique ID right now
-    final baseMetrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());
+  // Stop recording (if any)
+  try {
+    await _stopRecording();
+  } catch (_) {}
 
-    // include calibration retries reported by the calibration flow
-    final metrics = SessionMetrics(
-      maxFocusStreak: baseMetrics.maxFocusStreak,
-      fatigueIndex: baseMetrics.fatigueIndex,
-      microDistractions: baseMetrics.microDistractions,
-      calibrationRetries: widget.calibrationRetries,
-    );
-
-    final sessionId = 'local_${DateTime.now().millisecondsSinceEpoch}';
-
-    final result = SessionResult(
-      id: sessionId, // 🚨 Use the permanent ID
-      childId: widget.child.id,
-      childName: widget.child.name,
-      config: widget.config,
-      startTime: _sessionStart,
-      endTime: DateTime.now(),
-      gazePoints: _gazePoints,
-      attentionTimeline: _buildTimeline(),
-      metrics: metrics,
-      tempVideoPath: _tempVideoPath,
-    );
-
-    // Fire-and-forget save (don't await)
-    final service = FirestoreService();
-    service.saveSession(result).catchError((e) {
-      debugPrint('[LiveSession] Background sync error: $e');
-      return result.id;
-    });
-
-    // Navigate to a short confirmation screen, then user can open results
-    if (mounted) {
-      context.pushReplacement(
-        '/session/complete',
-        extra: result,
-      );
-    }
-
-    _bridge.stop();
+  // ─── الجزء المهم الجديد ───
+  // أرسل أمر stop للسيرفر علشان يبعت session_end + temp_video_path
+  try {
+    await _bridge.sendCommand({"command": "stop"});   // ← هذا السطر الجديد
+    await Future.delayed(const Duration(milliseconds: 600)); // انتظر الرد
+    print("📤 Sent STOP command to Python server");
+  } catch (e) {
+    print("Failed to send stop command: $e");
   }
+
+  final baseMetrics = calculateSessionMetrics(_gazePoints.cast<GazePoint>());
+
+  final metrics = SessionMetrics(
+    maxFocusStreak: baseMetrics.maxFocusStreak,
+    fatigueIndex: baseMetrics.fatigueIndex,
+    microDistractions: baseMetrics.microDistractions,
+    calibrationRetries: widget.calibrationRetries,
+  );
+
+  final sessionId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+
+  final result = SessionResult(
+    id: sessionId,
+    childId: widget.child.id,
+    childName: widget.child.name,
+    config: widget.config,
+    startTime: _sessionStart,
+    endTime: DateTime.now(),
+    gazePoints: _gazePoints,
+    attentionTimeline: _buildTimeline(),
+    metrics: metrics,
+    tempVideoPath: _tempVideoPath,   // ← هنا هيجي المسار من Python
+  );
+
+  final service = FirestoreService();
+  service.saveSession(result).catchError((e) {
+    debugPrint('[LiveSession] Background sync error: $e');
+    return result.id;
+  });
+
+  if (mounted) {
+    context.pushReplacement('/session/complete', extra: result);
+  }
+
+  _bridge.stop();
+}
 
   Future<void> _abortSession() async {
     _isRunning = false;
