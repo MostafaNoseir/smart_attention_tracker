@@ -756,7 +756,7 @@ extension _IndexedWhere on Iterable<GazePoint> {
   }
 }
 
-// ─── Export Button ────────────────────────────────────────────────
+// ─── Export CSV Button (مباشر بدون قائمة منسدلة) ─────────────────────────────
 class _ExportButton extends StatefulWidget {
   final SessionResult result;
   const _ExportButton({required this.result});
@@ -768,98 +768,56 @@ class _ExportButton extends StatefulWidget {
 class _ExportButtonState extends State<_ExportButton> {
   bool _loading = false;
 
-  // Future<void> _exportCsv() async {
-  //   setState(() => _loading = true);
-  //   try {
-  //     final service = FirestoreService();
-  //     await service.exportCsv(widget.result);
-  //     if (mounted) {
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         const SnackBar(
-  //           content: Text('CSV exported to Documents folder'),
-  //           backgroundColor: AppColors.success,
-  //         ),
-  //       );
-  //     }
-  //   } finally {
-  //     if (mounted) setState(() => _loading = false);
-  //   }
-  // }
-
   Future<void> _exportCsv() async {
-  setState(() => _loading = true);
-  try {
-    final service = FirestoreService();
-    await service.exportCsv(widget.result);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('File saved successfully!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+    setState(() => _loading = true);
+    try {
+      final service = FirestoreService();
+      await service.exportCsv(widget.result);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ CSV exported successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-  } catch (e) {
-    // If it's a cancellation, we just stop loading without an error message
-    // Otherwise, show an error.
-    if (e.toString() != "Exception: Export cancelled" && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
-        
-
-      );
-      print('Error exporting CSV: $e');
-      debugPrint('Error exporting CSV: $e');
-    }
-  } finally {
-    if (mounted) setState(() => _loading = false);
   }
-}
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      color: AppColors.surfaceElevated,
-      onSelected: (val) {
-        if (val == 'csv') _exportCsv();
-      },
-      itemBuilder: (_) => [
-        const PopupMenuItem(value: 'csv', child: Row(
-          children: [
-            Icon(Icons.table_chart_outlined, size: 16, color: AppColors.textSecondary),
-            SizedBox(width: 10),
-            Text('Export CSV'),
-          ],
-        )),
-        // const PopupMenuItem(value: 'pdf', child: Row(
-        //   children: [
-        //     Icon(Icons.picture_as_pdf_outlined, size: 16, color: AppColors.textSecondary),
-        //     SizedBox(width: 10),
-        //     Text('Export PDF report'),
-        //   ],
-        // )),
-      ],
-      child: _loading
-          ? const SizedBox(
-              width: 20, height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-          : Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.surfaceBorder),
-              ),
-              child: const Row(
+    return GestureDetector(
+      onTap: _loading ? null : _exportCsv,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.surfaceBorder),
+        ),
+        child: _loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+            : const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.download_rounded, size: 16, color: AppColors.textSecondary),
+                  Icon(Icons.table_chart_outlined, size: 16, color: AppColors.textSecondary),
                   SizedBox(width: 8),
-                  Text('Export', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  Text('Export CSV', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                 ],
               ),
-            ),
+      ),
     );
   }
 }
