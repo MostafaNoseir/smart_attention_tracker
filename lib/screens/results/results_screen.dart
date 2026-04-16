@@ -814,7 +814,7 @@ class _ExportButtonState extends State<_ExportButton> {
                 children: [
                   Icon(Icons.table_chart_outlined, size: 16, color: AppColors.textSecondary),
                   SizedBox(width: 8),
-                  Text('Export CSV', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  Text('Save CSV', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                 ],
               ),
       ),

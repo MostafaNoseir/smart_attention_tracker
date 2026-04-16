@@ -733,6 +733,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   bool _bridgeStarted = false;
   bool _isCameraReady = false;
   bool _isCollecting = false;
+  bool _waitingForCalibrateResponse = false;
 
   late ModelBridge _bridge;
   StreamSubscription<GazeData>? _gazeSub;
@@ -792,7 +793,10 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         final success = data['success'] ?? false;
 
         if (msg == 'calibration_done' && success) {
-          setState(() => _isDone = true);
+          setState(() {
+            _isDone = true;
+            _waitingForCalibrateResponse = false;
+          });
         } else if (msg == 'calibration_failed' || !success) {
           // increment retry counter so we can store this metric later
           _calibrationRetries++;
@@ -819,6 +823,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             _currentPoint = 0;
             _collectedPoints.clear();
             _isDone = false;
+            _waitingForCalibrateResponse = false;
           });
           _focusNode.requestFocus();
         }
@@ -903,7 +908,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   // }
 
   void _capturePoint() {
-    if (_isDone || !_isCameraReady || _isCollecting) return;
+    if (_isDone || !_isCameraReady || _isCollecting || _waitingForCalibrateResponse) return;
 
     if (_latestGaze == null || !_latestGaze!.faceDetected) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -943,7 +948,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       }
 
       // Keep waiting until we successfully gather 26 completely open-eye frames
-      if (samples.length >= 26) {
+        if (samples.length >= 26) {
         timer.cancel();
         final usableSamples = samples.sublist(6); // Drop first 300ms
 
@@ -958,10 +963,12 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             if (_currentPoint < _gridNormalized.length - 1) {
               _currentPoint++;
             } else {
-              _bridge.sendCommand({
-                'command': 'calibrate',
-                'points': _collectedPoints.map((p) => p.toJson()).toList(),
-              });
+                // Sent final calibration payload — mark waiting so space doesn't trigger another capture
+                _waitingForCalibrateResponse = true;
+                _bridge.sendCommand({
+                  'command': 'calibrate',
+                  'points': _collectedPoints.map((p) => p.toJson()).toList(),
+                });
             }
           });
         }

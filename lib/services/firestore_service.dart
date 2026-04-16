@@ -239,8 +239,12 @@ class FirestoreService {
     );
 
     if (outputFile != null) {
-      final file = File(outputFile);
-      await file.writeAsString(csvContent);
+      String finalPath = outputFile;
+      if (!finalPath.toLowerCase().endsWith('.csv')) {
+        finalPath = '$finalPath.csv';
+      }
+      final file = File(finalPath);
+      await file.writeAsBytes(fileBytes);
     } else {
       throw Exception("Export cancelled");
     }

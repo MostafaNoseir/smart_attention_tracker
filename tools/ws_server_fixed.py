@@ -228,8 +228,10 @@ class EyeTraxServer:
                 # Write duplicates (or drop frames) so file frame count matches wall-clock
                 if desired_total > frames_written:
                     to_write = desired_total - frames_written
+                    # Flip horizontally for saved video so it's not mirrored
+                    flipped_frame = cv2.flip(frame, 1)
                     for _ in range(to_write):
-                        writer.write(frame)
+                        writer.write(flipped_frame)
                         frames_written += 1
 
                 # Gaze estimation (unchanged behaviour)
